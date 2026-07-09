@@ -1,8 +1,8 @@
 package ec.edu.utn.golmundial.model.enums;
 
 public enum TipoTransaccion {
-    DEPOSITO,
-    RETIRO,
+    BONO_BIENVENIDA,
+    BONO_DIARIO,
     APUESTA_REALIZADA,
     PREMIO_PAGADO
 }

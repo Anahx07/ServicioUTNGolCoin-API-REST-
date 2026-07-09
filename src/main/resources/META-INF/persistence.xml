@@ -7,13 +7,12 @@
     <persistence-unit name="UtnGolCoinPU" transaction-type="JTA">
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
 
-        <properties>
-            <property name="jakarta.persistence.jdbc.driver" value="org.postgresql.Driver"/>
-            <property name="jakarta.persistence.jdbc.url" value="jdbc:postgresql://localhost:5432/utngolcoin_db"/>
-            <property name="jakarta.persistence.jdbc.user" value="eacoltac"/>
-            <property name="jakarta.persistence.jdbc.password" value="1234"/>
+        <!-- DataSource administrado por WildFly (ver instrucciones de configuración) -->
+        <jta-data-source>java:/UtnGolCoinDS</jta-data-source>
 
-            <property name="jakarta.persistence.schema-generation.database.action" value="none"/>
+        <properties>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect"/>
+            <property name="hibernate.schema-generation.database.action" value="none"/>
             <property name="hibernate.show_sql" value="true"/>
             <property name="hibernate.format_sql" value="true"/>
         </properties>

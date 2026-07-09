@@ -10,8 +10,8 @@
     <packaging>war</packaging>
 
     <properties>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -26,6 +26,10 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.3</version>
+            <scope>provided</scope>
+            <!-- El driver real lo provee WildFly como módulo del DataSource.
+                 Se deja como "provided" solo para poder compilar/testear localmente
+                 sin empaquetarlo duplicado dentro del WAR. -->
         </dependency>
     </dependencies>
 
