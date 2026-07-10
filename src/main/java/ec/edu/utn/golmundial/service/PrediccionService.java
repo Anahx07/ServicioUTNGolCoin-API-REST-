@@ -7,13 +7,15 @@ import ec.edu.utn.golmundial.model.enums.EstadoPrediccion;
 import ec.edu.utn.golmundial.model.enums.Pronostico;
 import ec.edu.utn.golmundial.model.enums.TipoTransaccion;
 import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Stateless
 @Transactional
@@ -22,17 +24,32 @@ public class PrediccionService {
     @PersistenceContext(unitName = "UtnGolCoinPU")
     private EntityManager em;
 
+    @Inject
+    private EstadisticasClient estadisticasClient;
+
     /**
      * Registra una predicción aplicando las reglas del negocio.
+     *
+     * RF17 (cierre por hora de inicio): NO se confía en una fecha enviada
+     * por el cliente. Se consulta la hora real del partido al Servicio de
+     * Estadísticas (fuente de verdad).
+     *
+     * Contingencia (RNF05): si esa consulta falla (servicio caído, timeout),
+     * se registra una advertencia y se PERMITE la predicción sin bloquear
+     * el negocio, en vez de negarla por una dependencia caída. Es una
+     * decisión de diseño explícita: prioriza disponibilidad sobre una
+     * validación estricta en el caso extremo de que el otro servicio esté
+     * caído justo en ese instante.
      */
     public Prediccion registrarPrediccion(Long usuarioId,
                                           Long partidoId,
                                           Pronostico pronostico,
                                           BigDecimal monto,
-                                          BigDecimal cuota,
-                                          LocalDateTime fechaHoraInicioPartido) {
+                                          BigDecimal cuota) {
 
         // Validar datos obligatorios
+        Objects.requireNonNull(usuarioId, "El usuarioId es obligatorio.");
+        Objects.requireNonNull(partidoId, "El partidoId es obligatorio.");
         Objects.requireNonNull(pronostico, "Debe seleccionar un pronóstico válido.");
 
         if (monto == null || monto.compareTo(BigDecimal.ZERO) <= 0) {
@@ -43,11 +60,14 @@ public class PrediccionService {
             throw new IllegalArgumentException("La cuota debe ser mayor que cero.");
         }
 
-        // RF17: rechazar predicciones después de la hora de inicio del partido
-        if (fechaHoraInicioPartido != null && LocalDateTime.now().isAfter(fechaHoraInicioPartido)) {
+        // RF17: validar cierre automático consultando al Servicio de Estadísticas
+        Optional<Instant> fechaInicio = estadisticasClient.obtenerFechaInicioPartido(partidoId);
+        if (fechaInicio.isPresent() && Instant.now().isAfter(fechaInicio.get())) {
             throw new IllegalStateException(
-                    "Las predicciones para este partido ya cerraron (inició el " + fechaHoraInicioPartido + ").");
+                    "Las predicciones para este partido ya cerraron (inició el " + fechaInicio.get() + ").");
         }
+        // Si fechaInicio está vacío (servicio de Estadísticas no disponible),
+        // se continúa sin bloquear — ver javadoc de este método.
 
         // Buscar la billetera del usuario
         Billetera billetera = em.createQuery(

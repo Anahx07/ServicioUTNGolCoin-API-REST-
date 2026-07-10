@@ -2,20 +2,16 @@ package ec.edu.utn.golmundial.dto;
 
 import ec.edu.utn.golmundial.model.enums.Pronostico;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * Cuerpo esperado al registrar una predicción 1X2 (RF15).
  *
- * NOTA DE ARQUITECTURA (pendiente de confirmar con el equipo, ver ADR):
- * el partido y su fecha/hora de inicio viven en la base del Servicio de
- * Estadísticas, no en esta. Por eso el frontend público debe enviar aquí
- * "fechaHoraInicioPartido" (obtenida al consultar el calendario), y este
- * servicio valida el cierre automático (RF17) comparándola con la hora
- * actual del servidor. Alternativa: este backend podría en cambio llamar
- * por REST al Servicio de Estadísticas para pedir esa fecha — se optó por
- * la opción del frontend por ser más simple y no acoplar los dos backends
- * en el camino síncrono de "crear predicción".
+ * Decisión de arquitectura (confirmada con el equipo, 2026-07-09):
+ * la hora de inicio del partido NO se recibe del cliente. Este servicio
+ * la consulta directamente al Servicio de Estadísticas (fuente de verdad)
+ * a través de {@link ec.edu.utn.golmundial.service.EstadisticasClient},
+ * para no confiar en un dato que el frontend podría enviar alterado.
+ * Ver esa clase para el manejo de contingencia si Estadísticas está caído.
  */
 public class PrediccionRequest {
 
@@ -24,7 +20,6 @@ public class PrediccionRequest {
     private Pronostico pronostico;
     private BigDecimal monto;
     private BigDecimal cuota;
-    private LocalDateTime fechaHoraInicioPartido;
 
     public PrediccionRequest() {}
 
@@ -42,7 +37,4 @@ public class PrediccionRequest {
 
     public BigDecimal getCuota() { return cuota; }
     public void setCuota(BigDecimal cuota) { this.cuota = cuota; }
-
-    public LocalDateTime getFechaHoraInicioPartido() { return fechaHoraInicioPartido; }
-    public void setFechaHoraInicioPartido(LocalDateTime fechaHoraInicioPartido) { this.fechaHoraInicioPartido = fechaHoraInicioPartido; }
 }

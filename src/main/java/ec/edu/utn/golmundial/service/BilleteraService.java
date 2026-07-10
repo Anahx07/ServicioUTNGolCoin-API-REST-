@@ -36,7 +36,7 @@ public class BilleteraService {
             throw new IllegalArgumentException("Ya existe una billetera para este usuario.");
         }
 
-        Billetera billetera = new Billetera(usuarioId, BONO_BIENVENIDA);
+        Billetera billetera = new Billetera(usuarioId, BigDecimal.ZERO);
         em.persist(billetera);
 
         Transaccion bono = new Transaccion();
@@ -44,6 +44,9 @@ public class BilleteraService {
         bono.setTipo(TipoTransaccion.BONO_BIENVENIDA);
         bono.setMonto(BONO_BIENVENIDA);
         em.persist(bono);
+
+        billetera.setSaldo(billetera.getSaldo().add(BONO_BIENVENIDA));
+        em.merge(billetera);
 
         return billetera;
     }

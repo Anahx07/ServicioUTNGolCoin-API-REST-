@@ -33,14 +33,13 @@ public class PrediccionController {
                     request.getPartidoId(),
                     request.getPronostico(),
                     request.getMonto(),
-                    request.getCuota(),
-                    request.getFechaHoraInicioPartido());
+                    request.getCuota());
 
             return Response.status(Response.Status.CREATED)
                     .entity(new PrediccionDTO(prediccion))
                     .build();
 
-        } catch (IllegalArgumentException | IllegalStateException e) {
+        } catch (IllegalArgumentException | IllegalStateException | NullPointerException e) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new MensajeDTO(e.getMessage()))
                     .build();
