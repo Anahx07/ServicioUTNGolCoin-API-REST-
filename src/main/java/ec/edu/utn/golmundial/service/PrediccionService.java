@@ -9,13 +9,14 @@ import ec.edu.utn.golmundial.model.enums.TipoTransaccion;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
+
 
 @Stateless
 @Transactional
@@ -23,23 +24,11 @@ public class PrediccionService {
 
     @PersistenceContext(unitName = "UtnGolCoinPU")
     private EntityManager em;
-
     @Inject
-    private EstadisticasClient estadisticasClient;
+    private EstadisticasClient estadisticasClient; 
 
     /**
-     * Registra una predicción aplicando las reglas del negocio.
-     *
-     * RF17 (cierre por hora de inicio): NO se confía en una fecha enviada
-     * por el cliente. Se consulta la hora real del partido al Servicio de
-     * Estadísticas (fuente de verdad).
-     *
-     * Contingencia (RNF05): si esa consulta falla (servicio caído, timeout),
-     * se registra una advertencia y se PERMITE la predicción sin bloquear
-     * el negocio, en vez de negarla por una dependencia caída. Es una
-     * decisión de diseño explícita: prioriza disponibilidad sobre una
-     * validación estricta en el caso extremo de que el otro servicio esté
-     * caído justo en ese instante.
+     * Registra una predicción.
      */
     public Prediccion registrarPrediccion(Long usuarioId,
                                           Long partidoId,
@@ -47,10 +36,15 @@ public class PrediccionService {
                                           BigDecimal monto,
                                           BigDecimal cuota) {
 
-        // Validar datos obligatorios
-        Objects.requireNonNull(usuarioId, "El usuarioId es obligatorio.");
-        Objects.requireNonNull(partidoId, "El partidoId es obligatorio.");
         Objects.requireNonNull(pronostico, "Debe seleccionar un pronóstico válido.");
+
+
+        try {
+        LocalDateTime fechaPartido = estadisticasClient.obtenerFechaPartido(partidoId);
+        validarCierrePorHora(fechaPartido);
+    } catch (Exception e) {
+        throw new IllegalArgumentException("No se puede registrar la apuesta: " + e.getMessage());
+    }
 
         if (monto == null || monto.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("El monto debe ser mayor que cero.");
@@ -60,54 +54,52 @@ public class PrediccionService {
             throw new IllegalArgumentException("La cuota debe ser mayor que cero.");
         }
 
-        // RF17: validar cierre automático consultando al Servicio de Estadísticas
-        Optional<Instant> fechaInicio = estadisticasClient.obtenerFechaInicioPartido(partidoId);
-        if (fechaInicio.isPresent() && Instant.now().isAfter(fechaInicio.get())) {
-            throw new IllegalStateException(
-                    "Las predicciones para este partido ya cerraron (inició el " + fechaInicio.get() + ").");
+        Billetera billetera;
+
+        try {
+
+            billetera = em.createQuery(
+                    "SELECT b FROM Billetera b WHERE b.usuarioId = :usuarioId",
+                    Billetera.class)
+                    .setParameter("usuarioId", usuarioId)
+                    .getSingleResult();
+
+        } catch (NoResultException e) {
+
+            throw new IllegalArgumentException(
+                    "El usuario no tiene una billetera registrada.");
         }
-        // Si fechaInicio está vacío (servicio de Estadísticas no disponible),
-        // se continúa sin bloquear — ver javadoc de este método.
 
-        // Buscar la billetera del usuario
-        Billetera billetera = em.createQuery(
-                "SELECT b FROM Billetera b WHERE b.usuarioId = :usuarioId",
-                Billetera.class)
-                .setParameter("usuarioId", usuarioId)
-                .getSingleResult();
-
-        // Validar saldo disponible
         if (billetera.getSaldo().compareTo(monto) < 0) {
             throw new IllegalArgumentException("Saldo insuficiente.");
         }
 
-        // Verificar que no exista otra predicción para el mismo partido
-        Long total = em.createQuery(
+        Long existe = em.createQuery(
                 "SELECT COUNT(p) FROM Prediccion p " +
-                "WHERE p.billetera.id = :billeteraId " +
-                "AND p.partidoId = :partidoId",
+                        "WHERE p.billetera.id = :billeteraId " +
+                        "AND p.partidoId = :partidoId",
                 Long.class)
                 .setParameter("billeteraId", billetera.getId())
                 .setParameter("partidoId", partidoId)
                 .getSingleResult();
 
-        if (total > 0) {
+        if (existe > 0) {
             throw new IllegalArgumentException(
                     "Ya existe una predicción registrada para este partido.");
         }
 
-        // Descontar el saldo de la billetera
-        billetera.setSaldo(billetera.getSaldo().subtract(monto));
+        billetera.setSaldo(
+                billetera.getSaldo().subtract(monto));
+
         em.merge(billetera);
 
-        // Registrar el movimiento en el ledger
         Transaccion tx = new Transaccion();
         tx.setBilletera(billetera);
         tx.setTipo(TipoTransaccion.APUESTA_REALIZADA);
-        tx.setMonto(monto);
+        tx.setMonto(monto.negate()); // Se registra como salida de dinero
+
         em.persist(tx);
 
-        // Guardar la predicción
         Prediccion prediccion = new Prediccion();
         prediccion.setBilletera(billetera);
         prediccion.setPartidoId(partidoId);
@@ -122,27 +114,60 @@ public class PrediccionService {
     }
 
     /**
-     * Obtiene todas las predicciones de un usuario, con su estado
-     * (pendiente, ganada o perdida) (RF22).
+     * Se utilizará cuando el router consulte la fecha del partido.
      */
-    public List<Prediccion> obtenerPrediccionesPorUsuario(Long usuarioId) {
-        Billetera billetera = em.createQuery(
-                "SELECT b FROM Billetera b WHERE b.usuarioId = :usuarioId", Billetera.class)
-                .setParameter("usuarioId", usuarioId)
-                .getSingleResult();
-        return obtenerPrediccionesPorBilletera(billetera.getId());
+    public void validarCierrePorHora(LocalDateTime fechaPartido) {
+
+        if (fechaPartido == null) {
+            return;
+        }
+
+        if (!LocalDateTime.now().isBefore(fechaPartido)) {
+            throw new IllegalStateException(
+                    "El partido ya comenzó. No se permiten más predicciones.");
+        }
     }
 
     /**
-     * Obtiene todas las predicciones registradas para una billetera.
+     * Obtiene las predicciones de una billetera.
      */
     public List<Prediccion> obtenerPrediccionesPorBilletera(Long billeteraId) {
+
         return em.createQuery(
                 "SELECT p FROM Prediccion p " +
-                "WHERE p.billetera.id = :billeteraId " +
-                "ORDER BY p.id DESC",
+                        "WHERE p.billetera.id = :billeteraId " +
+                        "ORDER BY p.id DESC",
                 Prediccion.class)
                 .setParameter("billeteraId", billeteraId)
                 .getResultList();
     }
+
+    /**
+     * Obtiene las predicciones de un usuario.
+     */
+    public List<Prediccion> obtenerPrediccionesPorUsuario(Long usuarioId) {
+
+        if (usuarioId == null) {
+            throw new IllegalArgumentException(
+                    "El usuario es obligatorio.");
+        }
+
+        try {
+
+            Billetera billetera = em.createQuery(
+                    "SELECT b FROM Billetera b WHERE b.usuarioId = :usuarioId",
+                    Billetera.class)
+                    .setParameter("usuarioId", usuarioId)
+                    .getSingleResult();
+
+            return obtenerPrediccionesPorBilletera(
+                    billetera.getId());
+
+        } catch (NoResultException e) {
+
+            throw new IllegalArgumentException(
+                    "El usuario no tiene una billetera registrada.");
+        }
+    }
+
 }

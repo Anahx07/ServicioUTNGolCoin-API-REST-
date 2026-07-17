@@ -28,10 +28,12 @@ CREATE TABLE predicciones (
     CONSTRAINT fk_prediccion_billetera FOREIGN KEY (billetera_id) REFERENCES billeteras(id) ON DELETE CASCADE
 );
 
--- 4. Tabla de control para el Bono Diario Anti-Bancarrota
-CREATE TABLE bonos_diarios (
-    id BIGSERIAL PRIMARY KEY,
-    usuario_id BIGINT NOT NULL,
-    fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-    CONSTRAINT unique_usuario_fecha UNIQUE (usuario_id, fecha)
+CREATE TABLE configuracion (
+    clave VARCHAR(50) PRIMARY KEY,
+    valor VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(255)
 );
+
+INSERT INTO configuracion (clave, valor, descripcion) 
+VALUES ('TIEMPO_ESPERA_BONO_MINUTOS', '2', 'Tiempo de espera en minutos para reclamar el bono de bancarrota');
+

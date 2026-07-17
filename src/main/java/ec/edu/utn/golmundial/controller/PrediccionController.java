@@ -27,19 +27,23 @@ public class PrediccionController {
      */
     @POST
     public Response crearPrediccion(PrediccionRequest request) {
+
         try {
-            Prediccion prediccion = prediccionService.registrarPrediccion(
-                    request.getUsuarioId(),
-                    request.getPartidoId(),
-                    request.getPronostico(),
-                    request.getMonto(),
-                    request.getCuota());
+
+            Prediccion prediccion =
+                    prediccionService.registrarPrediccion(
+                            request.getUsuarioId(),
+                            request.getPartidoId(),
+                            request.getPronostico(),
+                            request.getMonto(),
+                            request.getCuota());
 
             return Response.status(Response.Status.CREATED)
                     .entity(new PrediccionDTO(prediccion))
                     .build();
 
-        } catch (IllegalArgumentException | IllegalStateException | NullPointerException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
+
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new MensajeDTO(e.getMessage()))
                     .build();
@@ -51,15 +55,24 @@ public class PrediccionController {
      */
     @GET
     @Path("/usuario/{usuarioId}")
-    public Response listarPorUsuario(@PathParam("usuarioId") Long usuarioId) {
-        List<PrediccionDTO> predicciones = prediccionService.obtenerPrediccionesPorUsuario(usuarioId)
-                .stream()
-                .map(PrediccionDTO::new)
-                .collect(Collectors.toList());
+    public Response listarPorUsuario(
+            @PathParam("usuarioId") Long usuarioId) {
 
-        if (predicciones.isEmpty()) {
-            return Response.noContent().build();
+        try {
+
+            List<PrediccionDTO> predicciones =
+                    prediccionService.obtenerPrediccionesPorUsuario(usuarioId)
+                            .stream()
+                            .map(PrediccionDTO::new)
+                            .collect(Collectors.toList());
+
+            return Response.ok(predicciones).build();
+
+        } catch (IllegalArgumentException e) {
+
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new MensajeDTO(e.getMessage()))
+                    .build();
         }
-        return Response.ok(predicciones).build();
     }
 }
