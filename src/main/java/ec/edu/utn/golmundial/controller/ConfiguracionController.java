@@ -1,14 +1,16 @@
 package ec.edu.utn.golmundial.controller;
 
+import ec.edu.utn.golmundial.dto.MensajeDTO;
 import ec.edu.utn.golmundial.model.Configuracion;
 import jakarta.enterprise.context.RequestScoped;
-import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import java.util.List;
 
 @Path("/configuraciones")
 @RequestScoped
@@ -21,38 +23,74 @@ public class ConfiguracionController {
     private EntityManager em;
 
     /**
-     * Endpoint para que el Admin actualice el tiempo de espera del bono.
-     * PUT http://localhost:8080/utngolcoin-backend/api/configuraciones/TIEMPO_ESPERA_BONO_MINUTOS
+     * Lista todas las configuraciones del sistema.
+     *
+     * GET /configuraciones
      */
-    @PUT
-    @Path("/{clave}")
-    public Response actualizarConfiguracion(@PathParam("clave") String clave, Configuracion configInput) {
-        Configuracion existente = em.find(Configuracion.class, clave);
-        
-        if (existente == null) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity("{\"error\": \"Configuración no encontrada\"}")
-                    .build();
-        }
+    @GET
+    public Response listarConfiguraciones() {
 
-        // Actualizamos únicamente el valor numérico (los minutos)
-        existente.setValor(configInput.getValor());
-        em.merge(existente);
+        List<Configuracion> configuraciones = em.createQuery(
+                "SELECT c FROM Configuracion c ORDER BY c.clave",
+                Configuracion.class)
+                .getResultList();
 
-        return Response.ok(existente).build();
+        return Response.ok(configuraciones).build();
     }
-    
+
     /**
-     * Endpoint para consultar el valor actual de la configuración.
-     * GET http://localhost:8080/utngolcoin-backend/api/configuraciones/TIEMPO_ESPERA_BONO_MINUTOS
+     * Obtiene una configuración por su clave.
+     *
+     * GET /configuraciones/{clave}
      */
     @GET
     @Path("/{clave}")
-    public Response obtenerConfiguracion(@PathParam("clave") String clave) {
-        Configuracion config = em.find(Configuracion.class, clave);
-        if (config == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+    public Response obtenerConfiguracion(
+            @PathParam("clave") String clave) {
+
+        Configuracion configuracion = em.find(Configuracion.class, clave);
+
+        if (configuracion == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new MensajeDTO("Configuración no encontrada."))
+                    .build();
         }
-        return Response.ok(config).build();
+
+        return Response.ok(configuracion).build();
+    }
+
+    /**
+     * Actualiza el valor de una configuración.
+     *
+     * PUT /configuraciones/{clave}
+     */
+    @PUT
+    @Path("/{clave}")
+    public Response actualizarConfiguracion(
+            @PathParam("clave") String clave,
+            Configuracion configInput) {
+
+        if (configInput == null || configInput.getValor() == null) {
+
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new MensajeDTO(
+                            "El valor de la configuración es obligatorio."))
+                    .build();
+        }
+
+        Configuracion configuracion = em.find(Configuracion.class, clave);
+
+        if (configuracion == null) {
+
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new MensajeDTO("Configuración no encontrada."))
+                    .build();
+        }
+
+        configuracion.setValor(configInput.getValor());
+
+        em.merge(configuracion);
+
+        return Response.ok(configuracion).build();
     }
 }
