@@ -9,5 +9,6 @@ public enum TipoTransaccion {
     PREMIO_PAGADO,
 
     BONO_BANCARROTA
+    , RECARGA_ADMIN
 
 }

@@ -194,4 +194,27 @@ public class BilleteraService {
         return 2; 
     }
 
-} // Fin de la clase BilleteraService
+
+    public List<ec.edu.utn.golmundial.dto.RankingDTO> obtenerRankingApostadores() {
+        return em.createQuery(
+            "SELECT new ec.edu.utn.golmundial.dto.RankingDTO(b.usuarioId, SUM(ABS(t.monto))) " +
+            "FROM Transaccion t JOIN t.billetera b " +
+            "WHERE t.tipo = ec.edu.utn.golmundial.model.enums.TipoTransaccion.APUESTA_REALIZADA " +
+            "GROUP BY b.usuarioId ORDER BY SUM(ABS(t.monto)) DESC", 
+            ec.edu.utn.golmundial.dto.RankingDTO.class)
+            .getResultList();
+    }
+
+
+    public void recargarSaldoAdmin(Long usuarioId) {
+        Billetera billetera = consultarBilletera(usuarioId);
+        billetera.setSaldo(billetera.getSaldo().add(new java.math.BigDecimal("1.00")));
+        em.merge(billetera);
+        Transaccion t = new Transaccion();
+        t.setBilletera(billetera);
+        t.setTipo(ec.edu.utn.golmundial.model.enums.TipoTransaccion.RECARGA_ADMIN);
+        t.setMonto(new java.math.BigDecimal("1.00"));
+        em.persist(t);
+    }
+
+}

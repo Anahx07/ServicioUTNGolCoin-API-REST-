@@ -32,7 +32,7 @@
                  sin empaquetarlo duplicado dentro del WAR. -->
         </dependency>
     </dependencies>
-
+    
     <build>
         <finalName>utngolcoin-backend</finalName>
         <plugins>

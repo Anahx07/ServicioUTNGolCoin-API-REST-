@@ -21,7 +21,7 @@ public class EstadisticasClient {
         Client client = ClientBuilder.newClient();
         try {
             // Esto consultará, por ejemplo: http://192.168.0.11:5069/api/partidos/1
-            Response response = client.target(API_COMPANERO_URL + partidoId)
+            Response response = client.target(API_COMPANERO_URL + partidoId + "/fecha")
                     .request(MediaType.APPLICATION_JSON)
                     .get();
 
